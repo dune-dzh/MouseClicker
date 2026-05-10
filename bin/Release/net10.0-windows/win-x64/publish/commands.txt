@@ -1,0 +1,10 @@
+﻿# One command per line
+
+
+
+MoveTo 821x318
+LeftClick
+
+ScrollDown 2500
+
+Sleep 4000

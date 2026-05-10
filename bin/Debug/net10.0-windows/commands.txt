@@ -1,0 +1,4 @@
+﻿# One command per line
+
+MoveTo 1322x216
+LeftClick
