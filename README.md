@@ -24,15 +24,19 @@ Framework-dependent (smaller; target PC needs Desktop Runtime installed):
 dotnet publish -c Release -r win-x64 --self-contained false
 ```
 
+This also builds **`releases/release.zip`** — a ready-to-use package with the app, **`README.md`**, and a fresh sample **`commands.txt`** (no `settings.json` or other local dev files).
+
 Output folder:
 
 `bin/Release/net10.0-windows/win-x64/publish/`
 
-Copy the entire `publish` folder. Close any running `MouseClicker.exe` before publishing, or the build may fail because files are locked.
+**Download / share:** use `releases/release.zip` — unzip anywhere and run **`MouseClicker.exe`**.
+
+Close any running `MouseClicker.exe` before publishing, or the build may fail because files are locked.
 
 Self-contained publish may be possible if your SDK can restore the matching runtime packs; if restore fails, use framework-dependent + install runtime on the target machine.
 
-Publishing from this project copies **`README.md`** into the **`publish/`** folder beside the executable.
+The sample script in the repo is **`commands.sample.txt`** (copied into the zip as **`commands.txt`** on each Release publish).
 
 ## Configuration file
 
@@ -103,6 +107,7 @@ In the app window, the status line shows: `Hotkeys: F6 Start/Stop | F7 Pick | F1
 ## GUI
 
 - Edit the active config in the app; **Save Config** writes to the current file path.
+- In the script editor, type **`/`** at the start of a line to open the command list with short descriptions; type the start of a command name for autocomplete (**Tab** / **Enter** to insert, **Esc** to close).
 - **Load File** opens another config (`.txt`); the last path is remembered in **`settings.json`**.
 - **Reload File** reloads the current file from disk into the editor.
 - List of parsed steps and a timestamped log (current config path is shown).

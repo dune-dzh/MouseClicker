@@ -13,3 +13,4 @@ D:\dune2\w0rk\Google Drive\clicker\MouseClicker\obj\Release\net10.0-windows\win-
 D:\dune2\w0rk\Google Drive\clicker\MouseClicker\obj\Release\net10.0-windows\win-x64\MouseClicker.genruntimeconfig.cache
 D:\dune2\w0rk\Google Drive\clicker\MouseClicker\obj\Release\net10.0-windows\win-x64\ref\MouseClicker.dll
 D:\dune2\w0rk\Google Drive\clicker\MouseClicker\obj\Release\net10.0-windows\win-x64\MouseClicker.sourcelink.json
+D:\dune2\w0rk\Google Drive\clicker\MouseClicker\bin\Release\net10.0-windows\win-x64\commands.sample.txt

@@ -32,7 +32,7 @@ partial class Form1
         statusLabel = new Label();
         filePathLabel = new Label();
         hotkeysLabel = new Label();
-        configEditorTextBox = new TextBox();
+        configEditorTextBox = new RichTextBox();
         saveConfigButton = new Button();
         loadConfigButton = new Button();
         reloadConfigButton = new Button();
@@ -69,17 +69,19 @@ partial class Form1
         hotkeysLabel.Name = "hotkeysLabel";
         hotkeysLabel.Size = new Size(204, 15);
         hotkeysLabel.TabIndex = 2;
-        hotkeysLabel.Text = "Hotkeys: F6 Start/Stop | F7 Pick | F12 Kill";
+        hotkeysLabel.Text = "Hotkeys: F6 Start/Stop | F7 Pick | F12 Kill | Editor: / commands";
         // 
         // configEditorTextBox
         // 
+        configEditorTextBox.DetectUrls = false;
         configEditorTextBox.Font = new Font("Consolas", 9F);
         configEditorTextBox.Location = new Point(12, 68);
-        configEditorTextBox.Multiline = true;
         configEditorTextBox.Name = "configEditorTextBox";
-        configEditorTextBox.ScrollBars = ScrollBars.Vertical;
+        configEditorTextBox.ScrollBars = RichTextBoxScrollBars.Vertical;
+        configEditorTextBox.ShortcutsEnabled = false;
         configEditorTextBox.Size = new Size(380, 168);
         configEditorTextBox.TabIndex = 3;
+        configEditorTextBox.WordWrap = false;
         // 
         // saveConfigButton
         // 
@@ -189,7 +191,7 @@ partial class Form1
     private Label statusLabel;
     private Label filePathLabel;
     private Label hotkeysLabel;
-    private TextBox configEditorTextBox;
+    private RichTextBox configEditorTextBox;
     private Button saveConfigButton;
     private Button loadConfigButton;
     private Button reloadConfigButton;

@@ -6,12 +6,47 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
+    <PublishDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\publish\</PublishDir>
+    <ReleaseZipPath>$(MSBuildProjectDirectory)\releases\release.zip</ReleaseZipPath>
+    <ReleaseStageDir>$(MSBuildProjectDirectory)\obj\release-zip\</ReleaseStageDir>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="README.md">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
+    <None Include="commands.sample.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
+
+  <!-- After Release publish: stage publish output + sample commands.txt, then zip to releases/release.zip -->
+  <Target Name="CreateReleaseZip" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <RemoveDir Directories="$(ReleaseStageDir)" />
+    <MakeDir Directories="$(ReleaseStageDir);$(MSBuildProjectDirectory)\releases" />
+
+    <ItemGroup>
+      <PublishOutputFiles Include="$(PublishDir)**\*.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(PublishOutputFiles)"
+          DestinationFiles="@(PublishOutputFiles->'$(ReleaseStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <Delete Files="$(ReleaseStageDir)commands.txt;$(ReleaseStageDir)settings.json"
+            ContinueOnError="true" />
+
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\commands.sample.txt"
+          DestinationFiles="$(ReleaseStageDir)commands.txt" />
+
+    <Delete Files="$(ReleaseZipPath)" ContinueOnError="true" />
+
+    <ZipDirectory SourceDirectory="$(ReleaseStageDir)"
+                  DestinationFile="$(ReleaseZipPath)"
+                  Overwrite="true" />
+
+    <Message Importance="high" Text="Created $(ReleaseZipPath)" />
+  </Target>
 
 </Project>

@@ -36,6 +36,8 @@ public partial class Form1 : Form
     private int _stopUiNotified;
     private List<Step> _steps = [];
     private string _configLineEnding = Environment.NewLine;
+    private ConfigEditorAssist? _configEditorAssist;
+    private ConfigEditorSyntaxHighlighter? _configEditorHighlighter;
 
     public Form1()
     {
@@ -43,6 +45,22 @@ public partial class Form1 : Form
         _configPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigFileName);
         LoadLastConfigPathFromSettings();
         UpdateConfigPathLabel();
+        _configEditorAssist = new ConfigEditorAssist(
+            configEditorTextBox,
+            this,
+            () => _configEditorHighlighter?.ScheduleApply());
+        _configEditorHighlighter = new ConfigEditorSyntaxHighlighter(
+            configEditorTextBox,
+            () => _configEditorAssist?.IsOpen ?? false);
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        _configEditorHighlighter?.Dispose();
+        _configEditorAssist?.Dispose();
+        StopRunner();
+        StopKeyboardHook();
+        base.OnFormClosing(e);
     }
 
     protected override void OnLoad(EventArgs e)
@@ -56,11 +74,10 @@ public partial class Form1 : Form
         AppendLog("Emergency stop: F12.");
     }
 
-    protected override void OnFormClosing(FormClosingEventArgs e)
+    protected override void OnShown(EventArgs e)
     {
-        StopRunner();
-        StopKeyboardHook();
-        base.OnFormClosing(e);
+        base.OnShown(e);
+        _configEditorHighlighter?.Apply();
     }
 
     private void StartKeyboardHook()
@@ -636,11 +653,12 @@ public partial class Form1 : Form
     {
         if (!File.Exists(_configPath))
         {
-            configEditorTextBox.Text = string.Empty;
+            _configEditorHighlighter?.LoadText(string.Empty);
             return;
         }
 
-        configEditorTextBox.Text = ReadConfigFileText(_configPath, out _configLineEnding);
+        var text = ReadConfigFileText(_configPath, out _configLineEnding);
+        _configEditorHighlighter?.LoadText(text);
     }
 
     private bool SaveEditorToConfigFile()
@@ -780,6 +798,7 @@ public partial class Form1 : Form
         }
 
         configEditorTextBox.AppendText(_configLineEnding + line);
+        _configEditorHighlighter?.ScheduleApply();
     }
 
     private static List<Step> ParseConfigLines(string[] lines, out List<string> errors)
@@ -937,6 +956,28 @@ public partial class Form1 : Form
         return true;
     }
 
+    private static string GetDefaultConfigSample()
+    {
+        var samplePath = Path.Combine(AppContext.BaseDirectory, "commands.sample.txt");
+        if (File.Exists(samplePath))
+        {
+            return File.ReadAllText(samplePath, Encoding.UTF8);
+        }
+
+        return """
+               # One command per line
+               MoveTo 1000x1111
+               HoverNudge
+               LeftClick
+               LeftClick Repeat 0 10000
+               ScrollDown 250
+               ScrollUp 250
+               Sleep 1000
+               MoveTo 800x900
+               RightClick
+               """;
+    }
+
     private void EnsureDefaultConfigFileExists()
     {
         var defaultPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigFileName);
@@ -945,18 +986,7 @@ public partial class Form1 : Form
             return;
         }
 
-        var sample = """
-                     # One command per line
-                     MoveTo 1000x1111
-                     HoverNudge
-                     LeftClick
-                     LeftClick Repeat 0 10000
-                     ScrollDown 250
-                     ScrollUp 250
-                     Sleep 1000
-                     MoveTo 800x900
-                     RightClick
-                     """;
+        var sample = GetDefaultConfigSample();
         File.WriteAllText(defaultPath, sample, Utf8WithoutBom);
         _configLineEnding = DetectLineEnding(sample);
         AppendLog("Created sample commands.txt file.");

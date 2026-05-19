@@ -24,15 +24,19 @@ Framework-dependent (smaller; target PC needs Desktop Runtime installed):
 dotnet publish -c Release -r win-x64 --self-contained false
 ```
 
+This also builds **`releases/release.zip`** — a ready-to-use package with the app, **`README.md`**, and a fresh sample **`commands.txt`** (no `settings.json` or other local dev files).
+
 Output folder:
 
 `bin/Release/net10.0-windows/win-x64/publish/`
 
-Copy the entire `publish` folder. Close any running `MouseClicker.exe` before publishing, or the build may fail because files are locked.
+**Download / share:** use `releases/release.zip` — unzip anywhere and run **`MouseClicker.exe`**.
+
+Close any running `MouseClicker.exe` before publishing, or the build may fail because files are locked.
 
 Self-contained publish may be possible if your SDK can restore the matching runtime packs; if restore fails, use framework-dependent + install runtime on the target machine.
 
-Publishing from this project copies **`README.md`** into the **`publish/`** folder beside the executable.
+The sample script in the repo is **`commands.sample.txt`** (copied into the zip as **`commands.txt`** on each Release publish).
 
 ## Configuration file
 
@@ -52,7 +56,7 @@ On first run, the app creates **`commands.txt`** in the same folder as the execu
 | `RightClick` | Single right mouse button click. |
 | `LeftClick Repeat` | Repeat left clicks until you stop the runner (**F6** / **F12**). Default delay between clicks: **0 ms**. |
 | `RightClick Repeat` | Same as `LeftClick Repeat`, for the right button. |
-| `LeftClick Repeat 0 10000` | Repeat left clicks for **10000 ms** (10 seconds); **0** delay = ~1 ms between clicks (fastest reliable rate). |
+| `LeftClick Repeat 0 10000` | Repeat left clicks for **10000 ms** (10 seconds), waiting **0 ms** between clicks. |
 | `RightClick Repeat 50 5000` | Repeat right clicks for **5000 ms**, **50 ms** between clicks. |
 | `Sleep 1000` | Pause for 1000 milliseconds. |
 | `ScrollDown 500` | For about **500 ms**, send repeated vertical wheel ticks so the **document/view scrolls down** (toward later content). |
@@ -64,7 +68,8 @@ On first run, the app creates **`commands.txt`** in the same folder as the execu
 - `Repeat` only (no numbers) → repeat until stopped.
 - `Repeat delayMs durationMs` → repeat for **durationMs** total; **delayMs** is the pause between clicks (may be **0**).
 - `Repeat` with missing or invalid numbers (or `durationMs` of **0**) → treated as **one** click.
-- **delayMs 0** means as fast as practical; the app uses a **1 ms** minimum between clicks so the OS input queue does not keep delivering clicks for seconds after the duration ends.
+
+Config files may use Windows (**CRLF**) or Unix (**LF**) line endings.
 
 Scrolling is implemented by sending wheel events about every **50 ms** until the requested duration ends (cancellable via **F6** / **F12**).
 
@@ -102,6 +107,7 @@ In the app window, the status line shows: `Hotkeys: F6 Start/Stop | F7 Pick | F1
 ## GUI
 
 - Edit the active config in the app; **Save Config** writes to the current file path.
+- In the script editor, type **`/`** at the start of a line to open the command list with short descriptions; type the start of a command name for autocomplete (**Tab** / **Enter** to insert, **Esc** to close).
 - **Load File** opens another config (`.txt`); the last path is remembered in **`settings.json`**.
 - **Reload File** reloads the current file from disk into the editor.
 - List of parsed steps and a timestamped log (current config path is shown).

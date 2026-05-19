@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MouseClicker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a1e0ca8ed7595082c89eaeca608e3f00d1bb37c3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+86fbde3308e80af06b800e547322d7c423c60e33")]
 [assembly: System.Reflection.AssemblyProductAttribute("MouseClicker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MouseClicker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

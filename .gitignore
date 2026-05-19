@@ -1,0 +1,6 @@
+# Debug and Release build output (publish/ folders live under bin/)
+bin/
+obj/
+
+# Visual Studio user settings
+*.user
