@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 
 namespace MouseClicker;
@@ -15,8 +16,10 @@ public partial class Form1 : Form
     private const int VkF6 = 0x75;
     private const int VkF7 = 0x76;
     private const int VkF12 = 0x7B;
+    private const string DefaultConfigFileName = "commands.txt";
+    private const string SettingsFileName = "settings.json";
 
-    private readonly string _configPath;
+    private string _configPath;
     private CancellationTokenSource? _runCancellation;
     private Task? _runTask;
     private bool _isRunning;
@@ -32,18 +35,20 @@ public partial class Form1 : Form
     private int _forceStopRequested;
     private int _stopUiNotified;
     private List<Step> _steps = [];
+    private string _configLineEnding = Environment.NewLine;
 
     public Form1()
     {
         InitializeComponent();
-        _configPath = Path.Combine(AppContext.BaseDirectory, "commands.txt");
-        filePathLabel.Text = $"Config: {_configPath}";
+        _configPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigFileName);
+        LoadLastConfigPathFromSettings();
+        UpdateConfigPathLabel();
     }
 
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        EnsureConfigFileExists();
+        EnsureDefaultConfigFileExists();
         LoadConfigIntoEditor();
         ReloadConfigAndRender();
         StartKeyboardHook();
@@ -274,10 +279,10 @@ public partial class Form1 : Form
 
                 break;
             case StepKind.LeftClick:
-                PerformMouseClick(false);
+                PerformClickWithRepeat(false, step, token);
                 break;
             case StepKind.RightClick:
-                PerformMouseClick(true);
+                PerformClickWithRepeat(true, step, token);
                 break;
             case StepKind.Sleep:
                 if (step.DurationMs is not null)
@@ -307,6 +312,84 @@ public partial class Form1 : Form
         }
     }
 
+    private static void PerformClickWithRepeat(bool rightButton, Step step, CancellationToken token)
+    {
+        if (!step.ClickRepeatUntilStop && step.ClickRepeatDurationMs is null)
+        {
+            PerformMouseClick(rightButton);
+            return;
+        }
+
+        var delayMs = step.ClickRepeatDelayMs ?? 0;
+        if (step.ClickRepeatUntilStop)
+        {
+            RunClickRepeatUntilStop(rightButton, delayMs, token);
+            return;
+        }
+
+        var durationMs = step.ClickRepeatDurationMs!.Value;
+        if (durationMs <= 0)
+        {
+            PerformMouseClick(rightButton);
+            return;
+        }
+
+        RunClickRepeatForDuration(rightButton, delayMs, durationMs, token);
+    }
+
+    private static void RunClickRepeatUntilStop(bool rightButton, int delayMs, CancellationToken token)
+    {
+        var intervalMs = EffectiveClickIntervalMs(delayMs);
+        while (!token.IsCancellationRequested)
+        {
+            PerformMouseClick(rightButton);
+            WaitForClickInterval(intervalMs, token);
+        }
+    }
+
+    private static void RunClickRepeatForDuration(
+        bool rightButton,
+        int delayMs,
+        int durationMs,
+        CancellationToken token)
+    {
+        var intervalMs = EffectiveClickIntervalMs(delayMs);
+        var stopwatch = Stopwatch.StartNew();
+
+        while (stopwatch.ElapsedMilliseconds < durationMs)
+        {
+            token.ThrowIfCancellationRequested();
+            PerformMouseClick(rightButton);
+
+            if (stopwatch.ElapsedMilliseconds >= durationMs)
+            {
+                break;
+            }
+
+            var remaining = durationMs - stopwatch.ElapsedMilliseconds;
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            WaitForClickInterval((int)Math.Min(intervalMs, remaining), token);
+        }
+    }
+
+    /// <summary>
+    /// Delay 0 means as fast as practical; use a 1 ms floor so we do not flood the OS input queue
+    /// (queued clicks would keep arriving for seconds after the duration elapses).
+    /// </summary>
+    private static int EffectiveClickIntervalMs(int delayMs) => delayMs > 0 ? delayMs : 1;
+
+    private static void WaitForClickInterval(int intervalMs, CancellationToken token)
+    {
+        if (intervalMs > 0)
+        {
+            Task.Delay(intervalMs, token).Wait(token);
+        }
+    }
+
     private static void PerformScrollForDuration(bool downward, int durationMs, CancellationToken token)
     {
         if (durationMs <= 0)
@@ -316,20 +399,25 @@ public partial class Form1 : Form
 
         // Negative delta moves view toward bottom of document; positive toward top (matches README / UX).
         var deltaPerTick = unchecked((uint)(downward ? -WheelDelta : WheelDelta));
-        var end = Environment.TickCount64 + durationMs;
+        var stopwatch = Stopwatch.StartNew();
 
-        while (Environment.TickCount64 < end)
+        while (stopwatch.ElapsedMilliseconds < durationMs)
         {
             token.ThrowIfCancellationRequested();
             SendMouseWheel(deltaPerTick);
 
-            var remaining = (int)(end - Environment.TickCount64);
+            if (stopwatch.ElapsedMilliseconds >= durationMs)
+            {
+                break;
+            }
+
+            var remaining = durationMs - stopwatch.ElapsedMilliseconds;
             if (remaining <= 0)
             {
                 break;
             }
 
-            Task.Delay(Math.Min(ScrollStepIntervalMs, remaining), token).Wait(token);
+            Task.Delay((int)Math.Min(ScrollStepIntervalMs, remaining), token).Wait(token);
         }
     }
 
@@ -384,7 +472,12 @@ public partial class Form1 : Form
 
     private void ReloadConfigAndRender()
     {
-        _steps = ParseConfig(_configPath, out var errors);
+        RenderSteps(ParseConfigLines(SplitConfigLines(configEditorTextBox.Text), out var errors), errors);
+    }
+
+    private void RenderSteps(List<Step> steps, List<string> errors)
+    {
+        _steps = steps;
         stepsListBox.Items.Clear();
         foreach (var step in _steps)
         {
@@ -427,6 +520,43 @@ public partial class Form1 : Form
         LoadConfigIntoEditor();
         ReloadConfigAndRender();
         AppendLog("Editor reloaded from file.");
+    }
+
+    private void loadConfigButton_Click(object sender, EventArgs e)
+    {
+        if (_isRunning)
+        {
+            AppendLog("Stop the runner before loading another config file.");
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Load config file",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            CheckFileExists = true
+        };
+
+        if (!string.IsNullOrEmpty(_configPath))
+        {
+            var initialDir = Path.GetDirectoryName(_configPath);
+            if (!string.IsNullOrEmpty(initialDir) && Directory.Exists(initialDir))
+            {
+                dialog.InitialDirectory = initialDir;
+            }
+
+            dialog.FileName = Path.GetFileName(_configPath);
+        }
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        SetConfigPath(dialog.FileName);
+        LoadConfigIntoEditor();
+        ReloadConfigAndRender();
+        AppendLog($"Loaded config file: {_configPath}");
     }
 
     private void pickMoveToButton_Click(object sender, EventArgs e)
@@ -510,7 +640,7 @@ public partial class Form1 : Form
             return;
         }
 
-        configEditorTextBox.Text = File.ReadAllText(_configPath, Encoding.UTF8);
+        configEditorTextBox.Text = ReadConfigFileText(_configPath, out _configLineEnding);
     }
 
     private bool SaveEditorToConfigFile()
@@ -520,7 +650,9 @@ public partial class Form1 : Form
             return false;
         }
 
-        File.WriteAllText(_configPath, configEditorTextBox.Text, Encoding.UTF8);
+        var text = NormalizeConfigLineEndings(configEditorTextBox.Text, _configLineEnding);
+        File.WriteAllText(_configPath, text, Utf8WithoutBom);
+        SaveLastConfigPathToSettings();
         return true;
     }
 
@@ -533,18 +665,11 @@ public partial class Form1 : Form
 
         var position = Cursor.Position;
         var moveToLine = $"MoveTo {position.X}x{position.Y}";
-        if (string.IsNullOrWhiteSpace(configEditorTextBox.Text))
-        {
-            configEditorTextBox.Text = moveToLine;
-        }
-        else
-        {
-            configEditorTextBox.AppendText($"{Environment.NewLine}{moveToLine}");
-        }
+        AppendEditorLine(moveToLine);
 
         if (_pickerMode == PickerMode.MoveAndLeftClick)
         {
-            configEditorTextBox.AppendText($"{Environment.NewLine}LeftClick");
+            AppendEditorLine("LeftClick");
             AppendLog($"Captured position: {moveToLine} + LeftClick");
         }
         else
@@ -596,21 +721,75 @@ public partial class Form1 : Form
         });
     }
 
-    private static List<Step> ParseConfig(string path, out List<string> errors)
+    private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    private static string ReadConfigFileText(string path, out string lineEnding)
+    {
+        var text = File.ReadAllText(path, Encoding.UTF8);
+        text = StripUtf8Bom(text);
+        lineEnding = DetectLineEnding(text);
+        return text;
+    }
+
+    private static string StripUtf8Bom(string text) =>
+        text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;
+
+    private static string DetectLineEnding(string text)
+    {
+        if (text.Contains("\r\n", StringComparison.Ordinal))
+        {
+            return "\r\n";
+        }
+
+        if (text.Contains('\n'))
+        {
+            return "\n";
+        }
+
+        if (text.Contains('\r'))
+        {
+            return "\r";
+        }
+
+        return Environment.NewLine;
+    }
+
+    private static string[] SplitConfigLines(string? content)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return [];
+        }
+
+        var normalized = content
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n');
+        normalized = StripUtf8Bom(normalized);
+        return normalized.Split('\n');
+    }
+
+    private static string NormalizeConfigLineEndings(string content, string lineEnding) =>
+        string.Join(lineEnding, SplitConfigLines(content));
+
+    private void AppendEditorLine(string line)
+    {
+        if (configEditorTextBox.TextLength == 0)
+        {
+            configEditorTextBox.Text = line;
+            return;
+        }
+
+        configEditorTextBox.AppendText(_configLineEnding + line);
+    }
+
+    private static List<Step> ParseConfigLines(string[] lines, out List<string> errors)
     {
         errors = [];
         var steps = new List<Step>();
 
-        if (!File.Exists(path))
-        {
-            errors.Add("Config file not found.");
-            return steps;
-        }
-
-        var lines = File.ReadAllLines(path, Encoding.UTF8);
         for (var i = 0; i < lines.Length; i++)
         {
-            var raw = lines[i].Trim();
+            var raw = lines[i].Trim('\r', '\n', ' ', '\t');
             var lineNumber = i + 1;
 
             if (string.IsNullOrWhiteSpace(raw))
@@ -618,7 +797,7 @@ public partial class Form1 : Form
                 continue;
             }
 
-            if (raw.StartsWith("#", StringComparison.Ordinal))
+            if (raw.StartsWith('#'))
             {
                 continue;
             }
@@ -641,15 +820,13 @@ public partial class Form1 : Form
                 continue;
             }
 
-            if (raw.Equals("RightClick", StringComparison.OrdinalIgnoreCase))
+            if (TryParseClickCommand(raw, rightButton: false, lineNumber, steps, errors))
             {
-                steps.Add(Step.RightClick());
                 continue;
             }
 
-            if (raw.Equals("LeftClick", StringComparison.OrdinalIgnoreCase))
+            if (TryParseClickCommand(raw, rightButton: true, lineNumber, steps, errors))
             {
-                steps.Add(Step.LeftClick());
                 continue;
             }
 
@@ -710,9 +887,60 @@ public partial class Form1 : Form
         return steps;
     }
 
-    private void EnsureConfigFileExists()
+    private static bool TryParseClickCommand(
+        string raw,
+        bool rightButton,
+        int lineNumber,
+        List<Step> steps,
+        List<string> errors)
     {
-        if (File.Exists(_configPath))
+        var command = rightButton ? "RightClick" : "LeftClick";
+        if (!raw.StartsWith(command, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var remainder = raw[command.Length..].Trim();
+        if (remainder.Length == 0)
+        {
+            steps.Add(rightButton ? Step.RightClick() : Step.LeftClick());
+            return true;
+        }
+
+        if (!remainder.StartsWith("Repeat", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Line {lineNumber}: invalid {command} syntax. Expected: {command} or {command} Repeat [delayMs] [durationMs]");
+            return true;
+        }
+
+        remainder = remainder["Repeat".Length..].Trim();
+        if (remainder.Length == 0)
+        {
+            steps.Add(rightButton ? Step.RightClickRepeatUntilStop(0) : Step.LeftClickRepeatUntilStop(0));
+            return true;
+        }
+
+        var parts = remainder.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2 &&
+            int.TryParse(parts[0], out var delayMs) &&
+            int.TryParse(parts[1], out var durationMs) &&
+            delayMs >= 0 &&
+            durationMs > 0)
+        {
+            steps.Add(rightButton
+                ? Step.RightClickRepeat(delayMs, durationMs)
+                : Step.LeftClickRepeat(delayMs, durationMs));
+            return true;
+        }
+
+        steps.Add(rightButton ? Step.RightClick() : Step.LeftClick());
+        return true;
+    }
+
+    private void EnsureDefaultConfigFileExists()
+    {
+        var defaultPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigFileName);
+        if (!string.Equals(_configPath, defaultPath, StringComparison.OrdinalIgnoreCase) || File.Exists(_configPath))
         {
             return;
         }
@@ -722,14 +950,66 @@ public partial class Form1 : Form
                      MoveTo 1000x1111
                      HoverNudge
                      LeftClick
+                     LeftClick Repeat 0 10000
                      ScrollDown 250
                      ScrollUp 250
                      Sleep 1000
                      MoveTo 800x900
                      RightClick
                      """;
-        File.WriteAllText(_configPath, sample, Encoding.UTF8);
+        File.WriteAllText(defaultPath, sample, Utf8WithoutBom);
+        _configLineEnding = DetectLineEnding(sample);
         AppendLog("Created sample commands.txt file.");
+    }
+
+    private void SetConfigPath(string path)
+    {
+        _configPath = path;
+        UpdateConfigPathLabel();
+        SaveLastConfigPathToSettings();
+    }
+
+    private void UpdateConfigPathLabel()
+    {
+        filePathLabel.Text = $"Config: {_configPath}";
+    }
+
+    private string SettingsPath => Path.Combine(AppContext.BaseDirectory, SettingsFileName);
+
+    private void LoadLastConfigPathFromSettings()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath))
+            {
+                return;
+            }
+
+            var json = File.ReadAllText(SettingsPath, Encoding.UTF8);
+            var settings = JsonSerializer.Deserialize<AppSettings>(json);
+            if (!string.IsNullOrWhiteSpace(settings?.LastConfigPath) && File.Exists(settings.LastConfigPath))
+            {
+                _configPath = settings.LastConfigPath;
+            }
+        }
+        catch
+        {
+            // ignore corrupt settings
+        }
+    }
+
+    private void SaveLastConfigPathToSettings()
+    {
+        try
+        {
+            var settings = new AppSettings { LastConfigPath = _configPath };
+            var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(SettingsPath, json, Utf8WithoutBom);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Could not save settings: {ex.Message}");
+        }
     }
 
     private static void PerformMouseClick(bool rightButton)
@@ -776,15 +1056,55 @@ public partial class Form1 : Form
         MoveAndLeftClick
     }
 
-    private sealed record Step(StepKind Kind, int? X, int? Y, int? DurationMs, string DisplayText)
+    private sealed record Step(
+        StepKind Kind,
+        int? X,
+        int? Y,
+        int? DurationMs,
+        int? ClickRepeatDelayMs,
+        int? ClickRepeatDurationMs,
+        bool ClickRepeatUntilStop,
+        string DisplayText)
     {
-        public static Step MoveTo(int x, int y) => new(StepKind.MoveTo, x, y, null, $"MoveTo {x}x{y}");
-        public static Step LeftClick() => new(StepKind.LeftClick, null, null, null, "LeftClick");
-        public static Step RightClick() => new(StepKind.RightClick, null, null, null, "RightClick");
-        public static Step Sleep(int ms) => new(StepKind.Sleep, null, null, ms, $"Sleep {ms}");
-        public static Step HoverNudge() => new(StepKind.HoverNudge, null, null, null, "HoverNudge");
-        public static Step ScrollDown(int ms) => new(StepKind.ScrollDown, null, null, ms, $"ScrollDown {ms}");
-        public static Step ScrollUp(int ms) => new(StepKind.ScrollUp, null, null, ms, $"ScrollUp {ms}");
+        public static Step MoveTo(int x, int y) =>
+            new(StepKind.MoveTo, x, y, null, null, null, false, $"MoveTo {x}x{y}");
+
+        public static Step LeftClick() =>
+            new(StepKind.LeftClick, null, null, null, null, null, false, "LeftClick");
+
+        public static Step RightClick() =>
+            new(StepKind.RightClick, null, null, null, null, null, false, "RightClick");
+
+        public static Step LeftClickRepeatUntilStop(int delayMs) =>
+            new(StepKind.LeftClick, null, null, null, delayMs, null, true,
+                delayMs == 0 ? "LeftClick Repeat" : $"LeftClick Repeat {delayMs}");
+
+        public static Step RightClickRepeatUntilStop(int delayMs) =>
+            new(StepKind.RightClick, null, null, null, delayMs, null, true,
+                delayMs == 0 ? "RightClick Repeat" : $"RightClick Repeat {delayMs}");
+
+        public static Step LeftClickRepeat(int delayMs, int durationMs) =>
+            new(StepKind.LeftClick, null, null, null, delayMs, durationMs, false, $"LeftClick Repeat {delayMs} {durationMs}");
+
+        public static Step RightClickRepeat(int delayMs, int durationMs) =>
+            new(StepKind.RightClick, null, null, null, delayMs, durationMs, false, $"RightClick Repeat {delayMs} {durationMs}");
+
+        public static Step Sleep(int ms) =>
+            new(StepKind.Sleep, null, null, ms, null, null, false, $"Sleep {ms}");
+
+        public static Step HoverNudge() =>
+            new(StepKind.HoverNudge, null, null, null, null, null, false, "HoverNudge");
+
+        public static Step ScrollDown(int ms) =>
+            new(StepKind.ScrollDown, null, null, ms, null, null, false, $"ScrollDown {ms}");
+
+        public static Step ScrollUp(int ms) =>
+            new(StepKind.ScrollUp, null, null, ms, null, null, false, $"ScrollUp {ms}");
+    }
+
+    private sealed class AppSettings
+    {
+        public string? LastConfigPath { get; set; }
     }
 
     [Flags]

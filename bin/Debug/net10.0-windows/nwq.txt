@@ -1,0 +1,5 @@
+Sleep 5000
+MoveTo 377x329
+HoverNudge
+Sleep 500
+LeftClick Repeat 0 10000

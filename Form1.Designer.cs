@@ -34,6 +34,7 @@ partial class Form1
         hotkeysLabel = new Label();
         configEditorTextBox = new TextBox();
         saveConfigButton = new Button();
+        loadConfigButton = new Button();
         reloadConfigButton = new Button();
         pickMoveToButton = new Button();
         pickMoveAndLeftClickButton = new Button();
@@ -77,24 +78,34 @@ partial class Form1
         configEditorTextBox.Multiline = true;
         configEditorTextBox.Name = "configEditorTextBox";
         configEditorTextBox.ScrollBars = ScrollBars.Vertical;
-        configEditorTextBox.Size = new Size(380, 186);
+        configEditorTextBox.Size = new Size(380, 168);
         configEditorTextBox.TabIndex = 3;
         // 
         // saveConfigButton
         // 
-        saveConfigButton.Location = new Point(12, 260);
+        saveConfigButton.Location = new Point(12, 244);
         saveConfigButton.Name = "saveConfigButton";
-        saveConfigButton.Size = new Size(86, 23);
+        saveConfigButton.Size = new Size(115, 27);
         saveConfigButton.TabIndex = 4;
         saveConfigButton.Text = "Save Config";
         saveConfigButton.UseVisualStyleBackColor = true;
         saveConfigButton.Click += saveConfigButton_Click;
         // 
+        // loadConfigButton
+        // 
+        loadConfigButton.Location = new Point(133, 244);
+        loadConfigButton.Name = "loadConfigButton";
+        loadConfigButton.Size = new Size(115, 27);
+        loadConfigButton.TabIndex = 11;
+        loadConfigButton.Text = "Load File";
+        loadConfigButton.UseVisualStyleBackColor = true;
+        loadConfigButton.Click += loadConfigButton_Click;
+        // 
         // reloadConfigButton
         // 
-        reloadConfigButton.Location = new Point(104, 260);
+        reloadConfigButton.Location = new Point(254, 244);
         reloadConfigButton.Name = "reloadConfigButton";
-        reloadConfigButton.Size = new Size(86, 23);
+        reloadConfigButton.Size = new Size(115, 27);
         reloadConfigButton.TabIndex = 5;
         reloadConfigButton.Text = "Reload File";
         reloadConfigButton.UseVisualStyleBackColor = true;
@@ -102,9 +113,9 @@ partial class Form1
         // 
         // pickMoveToButton
         // 
-        pickMoveToButton.Location = new Point(196, 260);
+        pickMoveToButton.Location = new Point(12, 277);
         pickMoveToButton.Name = "pickMoveToButton";
-        pickMoveToButton.Size = new Size(86, 23);
+        pickMoveToButton.Size = new Size(180, 27);
         pickMoveToButton.TabIndex = 6;
         pickMoveToButton.Text = "Pick MoveTo";
         pickMoveToButton.UseVisualStyleBackColor = true;
@@ -112,9 +123,9 @@ partial class Form1
         // 
         // pickMoveAndLeftClickButton
         // 
-        pickMoveAndLeftClickButton.Location = new Point(288, 260);
+        pickMoveAndLeftClickButton.Location = new Point(198, 277);
         pickMoveAndLeftClickButton.Name = "pickMoveAndLeftClickButton";
-        pickMoveAndLeftClickButton.Size = new Size(104, 23);
+        pickMoveAndLeftClickButton.Size = new Size(171, 27);
         pickMoveAndLeftClickButton.TabIndex = 7;
         pickMoveAndLeftClickButton.Text = "Pick Move+Click";
         pickMoveAndLeftClickButton.UseVisualStyleBackColor = true;
@@ -123,7 +134,7 @@ partial class Form1
         // pickerHintLabel
         // 
         pickerHintLabel.AutoSize = true;
-        pickerHintLabel.Location = new Point(12, 289);
+        pickerHintLabel.Location = new Point(12, 310);
         pickerHintLabel.Name = "pickerHintLabel";
         pickerHintLabel.Size = new Size(145, 15);
         pickerHintLabel.TabIndex = 8;
@@ -134,17 +145,17 @@ partial class Form1
         stepsListBox.FormattingEnabled = true;
         stepsListBox.Location = new Point(398, 68);
         stepsListBox.Name = "stepsListBox";
-        stepsListBox.Size = new Size(374, 214);
+        stepsListBox.Size = new Size(374, 236);
         stepsListBox.TabIndex = 9;
         // 
         // logTextBox
         // 
-        logTextBox.Location = new Point(12, 310);
+        logTextBox.Location = new Point(12, 331);
         logTextBox.Multiline = true;
         logTextBox.Name = "logTextBox";
         logTextBox.ReadOnly = true;
         logTextBox.ScrollBars = ScrollBars.Vertical;
-        logTextBox.Size = new Size(760, 129);
+        logTextBox.Size = new Size(760, 108);
         logTextBox.TabIndex = 10;
         // 
         // Form1
@@ -152,12 +163,14 @@ partial class Form1
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(784, 451);
+        MinimumSize = new Size(800, 480);
         Controls.Add(logTextBox);
         Controls.Add(stepsListBox);
         Controls.Add(pickerHintLabel);
         Controls.Add(pickMoveAndLeftClickButton);
         Controls.Add(pickMoveToButton);
         Controls.Add(reloadConfigButton);
+        Controls.Add(loadConfigButton);
         Controls.Add(saveConfigButton);
         Controls.Add(configEditorTextBox);
         Controls.Add(hotkeysLabel);
@@ -178,6 +191,7 @@ partial class Form1
     private Label hotkeysLabel;
     private TextBox configEditorTextBox;
     private Button saveConfigButton;
+    private Button loadConfigButton;
     private Button reloadConfigButton;
     private Button pickMoveToButton;
     private Button pickMoveAndLeftClickButton;
