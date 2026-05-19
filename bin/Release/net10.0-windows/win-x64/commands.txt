@@ -1,9 +1,0 @@
-﻿# One command per line
-MoveTo 1000x1111
-HoverNudge
-LeftClick
-ScrollDown 250
-ScrollUp 250
-Sleep 1000
-MoveTo 800x900
-RightClick
